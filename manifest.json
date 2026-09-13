@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "SelfyStudio · Telegram Ads Assistant",
+  "version": "0.4.0",
+  "description": "Локальные рекламные пакеты, проверка и заполнение формы Telegram Ads.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "action": {
+    "default_title": "Открыть рекламный пакет"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "host_permissions": [
+    "https://ads.telegram.org/*",
+    "http://127.0.0.1/*"
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwOJusrl2D3JY6EbwcbQJI18xMJno0PHObYjjFfhnkc9INVpyqH5HlQ29sb0XMqYSEYngKydqEBoPNHP9scOHnH1LotNd9W9BHPxenlbguH50nwyBKDnYnnnDBY1A1RIB84PnWptWqGMimN5vqjppT/EAtVI1nroXj+KFVAK4OcNVLGcoULJpxBw8Nzn+52hTfgi7qaVh+0lZgOnUtW1m7zCuB3ez27/sno/23ivRNvmUVBh+bOeJkdaKgvQv/r/XvO6VN27fbHM5bjXov10i6t1L1Xm3gd1LCCmxyfi4dZhwpy6Ikf8kV8DYxbK2PoWTaDDkMm1iKeYSuxZfF0QmuwIDAQAB"
+}

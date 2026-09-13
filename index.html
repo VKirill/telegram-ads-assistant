@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Telegram Ads · Рабочее место</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="topbar">
+ <div class="brand">SelfyStudio <span>Telegram Ads</span></div>
+ <nav aria-label="Разделы" class="tabs">
+  <button data-tab="cabinet" aria-selected="true">Кабинет</button>
+  <button data-tab="packages" aria-selected="false">Пакеты</button>
+  <button data-tab="journal" aria-selected="false">Журнал</button>
+ </nav>
+ <div class="connection"><span id="bridge-state" role="status">MCP отключён</span><button id="bridge-connect" title="Подключить или отключить MCP">MCP ↔</button></div>
+</header>
+<main>
+<section data-panel="cabinet" class="workspace">
+ <div class="list-area">
+  <div class="section-head"><h1>Объявления</h1><div><button id="cabinet-export">Экспорт</button><button id="cabinet-read" class="primary">Обновить</button></div></div>
+  <div id="cabinet-status" role="status" class="status-line">Нажмите «Обновить», чтобы прочитать кабинет.</div>
+  <div id="cabinet-table" class="table-area"><div class="empty-state">Объявления из Telegram появятся здесь.<br><span>Выберите строку для работы с настройками.</span></div></div>
+  <details class="technical"><summary>Технический результат</summary><pre id="cabinet-output"></pre></details>
+ </div>
+ <aside class="editor" aria-label="Настройки объявления">
+  <h2>Настройки</h2>
+  <label>ID объявления<input id="ad-id" inputmode="numeric" placeholder="Выберите в таблице"></label>
+  <label>Действие<select id="operation-kind">
+   <option value="read_ad">Прочитать настройки</option><option value="read_budget">Бюджет и история</option><option value="read_statistics">Статистика</option>
+   <option value="prepare_ad">Новое объявление</option><option value="prepare_edit">Изменить поля</option><option value="prepare_budget">Изменить бюджет</option>
+  </select></label>
+  <details id="operation-options"><summary>Параметры действия · JSON</summary><textarea id="operation-json" rows="5" spellcheck="false" aria-label="Параметры JSON">{}</textarea><small>CPM: {"patch":{"cpm":0.2}}<br>Бюджет: {"direction":"add","amount":1}</small></details>
+  <button id="operation-run" class="primary full">Прочитать</button>
+  <div class="divider"></div>
+  <details id="media-options"><summary>Фото или видео</summary>
+   <label class="file-button">Выбрать файл<input id="media-import" type="file" accept="image/png,image/jpeg,video/mp4"></label>
+   <label>Или ссылка<input id="media-url" type="url" placeholder="https://… или http://localhost:…"></label>
+   <button id="media-url-load" class="full">Загрузить в черновик</button>
+  </details>
+  
+ </aside>
+</section>
+<section data-panel="packages" class="package-view" hidden>
+ <div class="section-head"><h1>Рекламные пакеты</h1><div class="actions"><button id="example">Пример</button><label class="button primary">Импорт JSON<input id="import" type="file" accept=".json,application/json" hidden></label></div></div>
+ <div id="message" role="status" aria-live="polite" class="status-line">Импортируйте пакет объявлений.</div>
+ <div id="summary" class="cards"></div>
+ <div class="table-area"><table><thead><tr><th>Объявление</th><th>Направление</th><th>CPM</th><th>Бюджет</th><th>Состояние</th><th></th></tr></thead><tbody id="rows"></tbody></table><p id="empty" class="empty-state">Пакет пока не загружен</p></div>
+ <div class="bottom-actions"><button id="inspect">Проверить форму</button><button id="clear">Очистить локальный пакет</button></div>
+</section>
+<section data-panel="journal" class="journal-view" hidden>
+ <div class="section-head"><h1>Журнал</h1><button id="export">Экспорт журнала</button></div>
+ <div class="journal-content"><details open><summary>Действия с пакетами</summary><pre id="log">Нет действий</pre></details><details><summary>Последний ответ MCP</summary><pre id="bridge-result"></pre></details></div>
+</section>
+</main>
+<footer>Локальное приложение <span id="version-label">0.4.0</span><span>Подготовка формы ≠ сохранение объявления</span></footer>
+<script type="module" src="src/layout.js"></script><script type="module" src="src/app.js"></script><script type="module" src="src/bridge-ui.js"></script><script type="module" src="src/console.js"></script>
+</body></html>
