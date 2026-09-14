@@ -7,8 +7,8 @@ from export_reviews import export, merge, pending
 class ExportTests(unittest.TestCase):
     def setUp(self):
         self.cs = {'schema_version':'1.0','channels':[
-            {'id':'b','title':'=1+1','discovery_sources':[{'value':'город'}]},
-            {'id':'a','title':'Текст, с "кавычками"\nи переносом'}]}
+            {'id':'b','subscribers':1000,'title':'=1+1','discovery_sources':[{'value':'город'}]},
+            {'id':'a','subscribers':2000,'title':'Текст, с "кавычками"\nи переносом'}]}
         self.reject = pending('a')
         self.reject.update(status='prefiltered', disposition='reject',
             reason='Футбольный канал', prefilter_source='https://example.org/channel')

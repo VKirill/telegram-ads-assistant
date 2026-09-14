@@ -18,6 +18,11 @@
   brief.json                       # продукт, ЦА, гео, ограничения и неизвестное
   search-log.json                   # запросы, фильтры, число результатов и новые ID
   candidates.json                  # полный реестр уникальных площадок
+  selection/                       # очереди по размеру и отзывы size_filtered
+    analysis-candidates.json        # только >=1000 для заданий/чтения
+    manual-candidates.json          # <1000: для ручной рекламы
+    unknown-size-candidates.json    # сначала уточнить размер
+    size-filtered-reviews.json      # без постового анализа
   raw/
     discovery/                     # исходные результаты поиска и каталога
     pages/<channel-id>/             # публично прочитанные страницы/снимки браузера
@@ -33,7 +38,8 @@
   final/
     reviews.json                   # агрегат скрипта, не редактировать вручную
     coverage.json                  # покрытие, ошибки, пропуски, complete
-    channels.csv                   # все кандидаты, включая отсеянных и pending
+    channels.csv                   # все кандидаты, включая отсеянных и малые
+    manual-ads.csv                 # только <1000, без анализа постов
     report.md                      # выводы, воронка, ограничения
     shortlist.csv                  # отдельная стартовая выборка, если нужна
 ```
@@ -45,7 +51,7 @@
 1. Родитель фиксирует brief, журнал поиска и candidates. Поисковые выдачи сохраняет в raw/discovery с источником и временем получения. До назначения партий дедуплицирует кандидатов; при расширении добавляет новые ID и отдельные задания, не перенумеровывает прежние.
 2. Агент читает публичные страницы без авторизации по [методике](channel-selection.md). В raw/pages сохраняет доступный текст/снимок страницы и метаданные: URL, retrieved_at, способ чтения, ограничение/ошибку. Не нужно скачивать всё медиа: достаточно материалов для проверки выводов. Cookies, токены и пользовательские сессии здесь не хранить. Недоступность страницы тоже фиксировать.
 3. Из прочитанного создаёт packets/<id>.json: id, channel_url, source_paths, retrieved_at, method, requested_posts, substantive_posts, oldest, newest, truncated, limitations и posts[]. Каждый пост содержит url, date, text; при наличии — ссылки на медиа и пометки рекламы/репоста. Недоступные поля — null/пустой массив с объяснением. Пакет не содержит ещё выводов о пригодности площадки. Исходный материал не переписывать ради соответствия выводу. Ранее предоставленные материалы сохранять с реальным происхождением; не маркировать их public-web-browser.
-4. В assignment родитель задаёт batch_id, channel_ids, brief_path, packet_paths и output_path. Помощник пишет только свой reviews/batches/batch-NNN.json, с envelope schema_version/channels по [контракту](../assets/channel-review-contract.md). Если помощник также читает страницы, отдельно назначь ему конкретные raw/pages/<id> и packets/<id>; не давай двум исполнителям одну площадку одновременно. Не выдавай нескольким помощникам общий файл для записи.
+4. Только по selection/analysis-candidates.json родитель формирует задания. В assignment родитель задаёт batch_id, channel_ids, brief_path, packet_paths и output_path. Помощник пишет только свой reviews/batches/batch-NNN.json, с envelope schema_version/channels по [контракту](../assets/channel-review-contract.md). Если помощник также читает страницы, отдельно назначь ему конкретные raw/pages/<id> и packets/<id>; не давай двум исполнителям одну площадку одновременно. Не выдавай нескольким помощникам общий файл для записи.
 5. Родитель хранит предварительные отказы в reviews/prefiltered.json по тому же контракту. Проверяет ответы по доказательствам, фиксирует замечания в checks/parent-review.json. Перед исправлением сохраняет старую версию в checks/revisions, затем заменяет рабочий файл партии. Архивные версии никогда не подаются сборщику; один ID — одно действующее решение. Изменение брифа после анализа требует явно пересмотреть затронутые отзывы, а не склеить их молча.
 6. Сборщик читает только действующие отзывы и создаёт final. Непрочитанные ID остаются pending; непроверенные выводы не становятся достоверными от наличия файла. Отчёт и shortlist строятся по агрегату; полный channels.csv никогда не сокращается до shortlist.
 
@@ -54,10 +60,10 @@
 Из RUN_DIR выполни (SKILL_DIR замени реальным путём установленного навыка):
 
 ```bash
-python3 <SKILL_DIR>/scripts/export_reviews.py --candidates candidates.json --reviews reviews/batches/ reviews/prefiltered.json --out final/
+python3 <SKILL_DIR>/scripts/export_reviews.py --candidates candidates.json --reviews reviews/batches/ reviews/prefiltered.json selection/size-filtered-reviews.json --out final/
 ```
 
-Если предварительных отказов нет, опусти reviews/prefiltered.json. При отсутствии любых отзывов создай пустую reviews/batches/: сборщик сохранит всех кандидатов как pending. Не передавай ему raw, packets, assignments, checks или предыдущий final. Формат таблицы и коды завершения — в [контракте CSV](../assets/channel-csv-contract.md).
+Если предварительных отказов нет, опусти reviews/prefiltered.json. При отсутствии любых отзывов создай пустую reviews/batches/: сборщик сохранит всех кандидатов как pending. Сначала создавай selection через prepare_candidates.py. Каждый ID из size-filtered-reviews исключи из обычных партий и prefiltered, иначе получится дубль. Не передавай ему raw, packets, assignments, checks или предыдущий final. Формат таблицы и коды завершения — в [контракте CSV](../assets/channel-csv-contract.md).
 
 При возобновлении открой brief, candidates, assignments и coverage; продолжай отсутствующие/неуспешные записи без повторного сбора уже доступных материалов, если их свежесть достаточна. Сравни фактические файлы: coverage мог устареть. Перед итогом снова собери final. Незавершённое чтение и needs_review укажи числом и причиной.
 

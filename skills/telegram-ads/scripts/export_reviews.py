@@ -6,13 +6,14 @@ import json
 import io
 from pathlib import Path
 from validate_reviews import validate
+from channel_eligibility import route, size_review
 
-FIELDS = ['id', 'username', 'title', 'url', 'disposition', 'category', 'status',
+FIELDS = ['id', 'username', 'title', 'url', 'subscribers', 'subscriber_count_checked_at', 'analysis_route', 'disposition', 'category', 'status',
           'decision_basis', 'reason', 'confidence', 'observed_topics',
           'audience_hypotheses', 'evidence', 'prefilter_source',
           'discovery_sources', 'sample', 'scores', 'geo', 'ads']
 LABELS = dict(target='Целевой', adjacent='Смежный', expansion='Для расширения',
-              reject='Отсеян', needs_review='Требует проверки')
+              reject='Отсеян', needs_review='Требует проверки', manual_ads='Для ручной рекламы')
 
 def pending(rid):
     return dict(id=rid, status='pending', disposition='needs_review',
@@ -42,7 +43,16 @@ def merge(candidates, reviews):
         raise ValueError('; '.join(errors))
     by_id = {r['id']: r for r in reviews}
     missing = initial['missing_ids']
-    ordered = [by_id.get(c['id'], pending(c['id']))
+    for c in candidates['channels']:
+        if c['id'] in by_id:
+            r = by_id[c['id']]
+            if route(c)=='manual_ads' and (r['status']!='size_filtered' or r['disposition']!='manual_ads'):
+                raise ValueError(c['id']+': below 1000 subscribers; archive previous analysis and use size-filtered review')
+            if route(c)=='unknown_size' and r['status'] not in ['pending','prefiltered']:
+                raise ValueError(c['id']+': unknown subscriber count; verify metadata before analysis')
+            if route(c)=='analyze' and r['status']=='size_filtered':
+                raise ValueError(c['id']+': size filter conflicts with current subscriber count')
+    ordered = [by_id.get(c['id'], pending(c['id']) if route(c)=='analyze' else size_review(c))
                for c in sorted(candidates['channels'], key=lambda c: c['id'])]
     merged = {'schema_version': '1.0', 'channels': ordered}
     coverage = validate(candidates, merged)
@@ -68,15 +78,24 @@ def export(candidates, reviews, out):
     buffer = io.StringIO(newline='')
     writer = csv.DictWriter(buffer, fieldnames=FIELDS, lineterminator='\n')
     writer.writeheader()
+    manual_rows = []
     for r in merged['channels']:
         c = metadata[r['id']]
         row = {k: r.get(k) for k in FIELDS}
-        row.update({k: c.get(k) for k in ['id', 'username', 'title', 'url', 'discovery_sources']})
+        row.update({k: c.get(k) for k in ['id', 'username', 'title', 'url', 'subscribers', 'discovery_sources']})
+        row['subscriber_count_checked_at'] = c.get('details_checked_at')
+        row['analysis_route'] = route(c)
         row['category'] = LABELS[r['disposition']]
         row['decision_basis'] = {'prefiltered': 'metadata', 'reviewed': 'posts',
-            'read_failed': 'read_failed', 'pending': 'pending'}[r['status']]
-        writer.writerow({k: cell(row[k]) for k in FIELDS})
+            'read_failed': 'read_failed', 'pending': 'pending', 'size_filtered': 'subscriber_count'}[r['status']]
+        rendered = {k: cell(row[k]) for k in FIELDS}
+        writer.writerow(rendered)
+        if r["disposition"] == "manual_ads": manual_rows.append(rendered)
     payloads['channels.csv'] = buffer.getvalue().encode('utf-8-sig')
+    manual = io.StringIO(newline='')
+    mw = csv.DictWriter(manual, fieldnames=FIELDS, lineterminator='\n')
+    mw.writeheader(); mw.writerows(manual_rows)
+    payloads['manual-ads.csv'] = manual.getvalue().encode('utf-8-sig')
     out.mkdir(parents=True, exist_ok=True)
     for name, payload in payloads.items():
         (out / name).write_bytes(payload)

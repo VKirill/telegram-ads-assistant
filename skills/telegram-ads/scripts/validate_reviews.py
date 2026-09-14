@@ -3,6 +3,7 @@
 import argparse,json,sys
 from collections import Counter
 from pathlib import Path
+from channel_eligibility import route
 
 def validate(candidates,reviews):
  errors=[]
@@ -15,7 +16,7 @@ def validate(candidates,reviews):
    result.append(row)
   return result
  cs=records(candidates,'candidates');rs=records(reviews,'reviews')
- ci=Counter(x['id'] for x in cs);ri=Counter(x['id'] for x in rs)
+ ci=Counter(x['id'] for x in cs);ri=Counter(x['id'] for x in rs);metadata={x['id']:x for x in cs}
  missing=sorted(ci.keys()-ri.keys());extra=sorted(ri.keys()-ci.keys());duplicates=sorted(k for k,v in ri.items() if v>1)
  if any(v>1 for v in ci.values()):errors.append('candidates contain duplicate IDs')
  if missing:errors.append('missing reviews')
@@ -25,8 +26,17 @@ def validate(candidates,reviews):
  for r in rs:
   rid=r['id'];status=r.get('status');kind=r.get('disposition');statuses[str(status)]+=1;classes[str(kind)]+=1
   def fail(why):errors.append(rid+': '+why)
-  if status not in ['reviewed','prefiltered','read_failed','pending']:fail('invalid status')
-  if kind not in ['target','adjacent','expansion','reject','needs_review']:fail('invalid disposition')
+  c=metadata.get(rid)
+  if c is not None:
+   eligibility=route(c)
+   if eligibility=='manual_ads' and (status!='size_filtered' or kind!='manual_ads'):fail('below 1000 subscribers: must be size_filtered/manual_ads')
+   if eligibility=='unknown_size' and status not in ['pending','prefiltered']:fail('unknown subscriber count: do not analyze posts')
+   if eligibility=='analyze' and status=='size_filtered':fail('size filter conflicts with subscriber count')
+  if status not in ['reviewed','prefiltered','read_failed','pending','size_filtered']:fail('invalid status')
+  if kind not in ['target','adjacent','expansion','reject','needs_review','manual_ads']:fail('invalid disposition')
+  if status=='size_filtered' and (kind!='manual_ads' or not r.get('prefilter_source')):fail('size_filtered requires manual_ads and source')
+  if kind=='manual_ads' and status!='size_filtered':fail('manual_ads requires size_filtered')
+  if status=='size_filtered' and (r.get('evidence') or (r.get('sample',{}).get('substantive_posts') if isinstance(r.get('sample'),dict) else None)!=0):fail('size_filtered must not contain post analysis')
   if not isinstance(r.get('reason'),str) or not r['reason'].strip():fail('missing reason')
   if status in ['read_failed','pending'] and kind!='needs_review':fail('unread must be needs_review')
   if status=='prefiltered' and (kind!='reject' or not r.get('prefilter_source')):fail('prefilter requires reject and source')
@@ -48,6 +58,7 @@ def validate(candidates,reviews):
    if not isinstance(score,dict):fail('invalid score '+key);continue
    value=score.get('value')
    if 'value' not in score or value is not None and (type(value)!=int or not 0<=value<=3) or not score.get('reason'):fail('invalid score '+key)
+  if status=='size_filtered' and any(isinstance(scores.get(k),dict) and scores[k].get('value') is not None for k in ['need_fit','offer_fit','context_fit']):fail('size_filtered scores must be unknown')
   geo=r.get('geo') if isinstance(r.get('geo'),dict) else {}
   if geo.get('status') not in ['content_match','audience_verified','mismatch','unknown'] or not geo.get('reason'):fail('invalid geography')
   if geo.get('status')=='audience_verified' and not (geo.get('source_url') and geo.get('measured_at')):fail('verified audience requires measurement source/date')

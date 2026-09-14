@@ -3,6 +3,7 @@
 import argparse,csv,json,os,sqlite3,sys
 from pathlib import Path
 from morphology import build_query
+from channel_eligibility import route
 
 def main():
  p=argparse.ArgumentParser(description=__doc__)
@@ -10,7 +11,7 @@ def main():
  s=p.add_subparsers(dest='cmd',required=True)
  s.add_parser('stats')
  for name in ('search','similar'):
-  q=s.add_parser(name);q.add_argument('--limit',type=int,default=30);q.add_argument('--category');q.add_argument('--microcategory');q.add_argument('--min-subscribers',type=int,default=0);q.add_argument('--exact',action='store_true',help='Отключить морфологию');q.add_argument('--explain-query',action='store_true',help='Вывести формы поиска в stderr')
+  q=s.add_parser(name);q.add_argument('--limit',type=int,default=30);q.add_argument('--category');q.add_argument('--microcategory');q.add_argument('--min-subscribers',type=int,default=1000);q.add_argument('--include-small',action='store_true',help='Выгрузить также малые каналы для ручной рекламы, без анализа постов');q.add_argument('--exact',action='store_true',help='Отключить морфологию');q.add_argument('--explain-query',action='store_true',help='Вывести формы поиска в stderr')
   if name=='search':q.add_argument('--query',default='');q.add_argument('--match',choices=['all','any'],default='any')
   else:
    q.add_argument('--seed',required=True,help='TGPages UUID, @username or https://t.me/username');q.add_argument('--query',default='',help='Ограничить соседей словами, например географией')
@@ -32,7 +33,8 @@ def main():
   result={'database':str(dbpath),'channels':db.execute('SELECT count(*) FROM channels').fetchone()[0],'categories':[dict(x) for x in db.execute('SELECT category,microcategory,count(*) AS channels FROM channels GROUP BY category,microcategory ORDER BY category,microcategory')],'metadata':dict(db.execute('SELECT key,value FROM metadata'))}
   print(json.dumps(result,ensure_ascii=False,indent=2));return
  if not 1<=a.limit<=500:p.error('--limit должен быть от 1 до 500')
- filters=['c.subscribers>=?'];params=[a.min_subscribers]
+ if a.min_subscribers<1000:p.error('--min-subscribers не может быть меньше 1000; для отдельного списка малых каналов используйте --include-small')
+ filters=['(c.subscribers>=0 OR c.subscribers IS NULL)'] if a.include_small else ['c.subscribers>=?'];params=[] if a.include_small else [a.min_subscribers]
  for field in ('category','microcategory'):
   value=getattr(a,field)
   if value:filters.append('c.'+field+'=?');params.append(value)
@@ -59,6 +61,7 @@ def main():
    filters.append('c.rowid IN (SELECT rowid FROM channel_search WHERE channel_search MATCH ?)');params.append(query)
   rows=db.execute('SELECT '+fields+',((c.x-?)*(c.x-?)+(c.y-?)*(c.y-?)) AS distance_squared FROM channels c WHERE c.id<>? AND '+' AND '.join(filters)+' ORDER BY distance_squared,c.id LIMIT ?',[seed['x'],seed['x'],seed['y'],seed['y'],seed['id']]+params+[a.limit])
   result=[dict(r,seed_id=seed['id'],discovery='map_2d_distance',audience_overlap=None) for r in rows]
+ for item in result:item['analysis_route']=route(item)
  if a.format=='csv':
   if result:w=csv.DictWriter(sys.stdout,fieldnames=result[0].keys());w.writeheader();w.writerows(result)
  else:print(json.dumps(result,ensure_ascii=False,indent=2))

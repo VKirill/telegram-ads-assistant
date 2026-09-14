@@ -9,8 +9,8 @@ UTF-8 JSON — общий формат обоих профилей. Не сох�
 | Поле | Контракт |
 |---|---|
 | id | Тот же стабильный ID из candidates |
-| status | reviewed / prefiltered / read_failed / pending |
-| disposition | target / adjacent / expansion / reject / needs_review |
+| status | reviewed / prefiltered / read_failed / pending / size_filtered |
+| disposition | target / adjacent / expansion / reject / needs_review / manual_ads |
 | reason | Содержательное основание решения; для сбоя — причина/следующий шаг |
 | observed_topics | Массив наблюдаемых тем; [] при отсутствии данных |
 | audience_hypotheses | Массив объектов {hypothesis, basis}; не выдавать предположение за замер |
@@ -20,7 +20,9 @@ UTF-8 JSON — общий формат обоих профилей. Не сох�
 | confidence | low / medium / high |
 | geo | {status: content_match/audience_verified/mismatch/unknown, reason, source_url, measured_at}; audience_verified требует источника измерения и даты |
 | ads | {status: unchecked/available/unavailable, source, checked_at}; unchecked не подтверждает возможность размещения |
-| prefilter_source | Строка происхождения решения по метаданным; обязательна при prefiltered |
+| prefilter_source | Строка происхождения решения по метаданным; обязательна при prefiltered и size_filtered |
+
+size_filtered допускает только manual_ads: меньше 1000 подписчиков, sample.substantive_posts=0, evidence=[], оценки null; это фильтр размера, не оценка содержания. Поле subscribers в candidates — целое число, дата снимка details_checked_at. Неизвестный размер не разрешает чтение.
 
 prefiltered допускает только reject. read_failed/pending допускают только needs_review. reviewed означает публикации реально прочитаны; при сомнениях disposition тоже needs_review. Отсутствующий доступ не равен reject.
 
