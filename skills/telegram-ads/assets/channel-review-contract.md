@@ -14,7 +14,7 @@ UTF-8 JSON — общий формат обоих профилей. Не сох�
 | reason | Содержательное основание решения; для сбоя — причина/следующий шаг |
 | observed_topics | Массив наблюдаемых тем; [] при отсутствии данных |
 | audience_hypotheses | Массив объектов {hypothesis, basis}; не выдавать предположение за замер |
-| evidence | Массив {url, date, observation}; для reviewed это ссылки на посты, не только главная канала |
+| evidence | Массив {url, date, observation}; для reviewed это ссылки на реально прочитанные посты, подтверждающие конкретные выводы, не первые произвольные посты/заглушки/главная канала |
 | sample | {requested_posts, substantive_posts, oldest, newest, retrieved_at, method, truncated}; отсутствующие даты null, method для нового чтения public-web-browser, для предоставленных материалов provided-export с указанием происхождения, при отсутствии чтения none; у исторических записей сохраняй фактический исходный method |
 | scores | need_fit, offer_fit, context_fit: каждый {value: 0..3 или null, reason: строка} |
 | confidence | low / medium / high |
