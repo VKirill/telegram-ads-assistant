@@ -3,6 +3,7 @@
 import argparse
 import csv
 import json
+import io
 from pathlib import Path
 from validate_reviews import validate
 
@@ -60,20 +61,25 @@ def cell(value):
 def export(candidates, reviews, out):
     merged, coverage = merge(candidates, reviews)
     metadata = {c['id']: c for c in candidates['channels']}
-    out.mkdir(parents=True, exist_ok=True)
+    # Serialize and encode every output before touching an existing result.
+    payloads = {}
     for name, doc in [('reviews.json', merged), ('coverage.json', coverage)]:
-        (out / name).write_text(json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
-    with (out / 'channels.csv').open('w', encoding='utf-8-sig', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS, lineterminator='\n')
-        writer.writeheader()
-        for r in merged['channels']:
-            c = metadata[r['id']]
-            row = {k: r.get(k) for k in FIELDS}
-            row.update({k: c.get(k) for k in ['id', 'username', 'title', 'url', 'discovery_sources']})
-            row['category'] = LABELS[r['disposition']]
-            row['decision_basis'] = {'prefiltered': 'metadata', 'reviewed': 'posts',
-                'read_failed': 'read_failed', 'pending': 'pending'}[r['status']]
-            writer.writerow({k: cell(row[k]) for k in FIELDS})
+        payloads[name] = (json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
+    buffer = io.StringIO(newline='')
+    writer = csv.DictWriter(buffer, fieldnames=FIELDS, lineterminator='\n')
+    writer.writeheader()
+    for r in merged['channels']:
+        c = metadata[r['id']]
+        row = {k: r.get(k) for k in FIELDS}
+        row.update({k: c.get(k) for k in ['id', 'username', 'title', 'url', 'discovery_sources']})
+        row['category'] = LABELS[r['disposition']]
+        row['decision_basis'] = {'prefiltered': 'metadata', 'reviewed': 'posts',
+            'read_failed': 'read_failed', 'pending': 'pending'}[r['status']]
+        writer.writerow({k: cell(row[k]) for k in FIELDS})
+    payloads['channels.csv'] = buffer.getvalue().encode('utf-8-sig')
+    out.mkdir(parents=True, exist_ok=True)
+    for name, payload in payloads.items():
+        (out / name).write_bytes(payload)
     return coverage
 
 def main():

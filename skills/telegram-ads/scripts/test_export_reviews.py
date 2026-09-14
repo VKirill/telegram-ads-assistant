@@ -43,5 +43,15 @@ class ExportTests(unittest.TestCase):
                 export(self.cs,[self.reject,self.reject],out)
             self.assertEqual(before,{p.name:p.read_bytes() for p in out.iterdir()})
 
+    def test_invalid_unicode_does_not_damage_previous_export(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp)
+            export(self.cs, [self.reject], out)
+            before={p.name:p.read_bytes() for p in out.iterdir()}
+            broken=dict(self.reject, reason='broken emoji ' + chr(0xD83D))
+            with self.assertRaises(UnicodeEncodeError):
+                export(self.cs, [broken], out)
+            self.assertEqual(before, {p.name:p.read_bytes() for p in out.iterdir()})
+
 if __name__ == '__main__':
     unittest.main()
