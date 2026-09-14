@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only TGPages discovery. Python stdlib, SQLite FTS5."""
+"""Read-only TGPages discovery. SQLite FTS5 and pymorphy3 Russian inflection expansion."""
 import argparse,csv,json,os,sqlite3,sys
 from pathlib import Path
+from morphology import build_query
 
 def main():
  p=argparse.ArgumentParser(description=__doc__)
@@ -9,11 +10,18 @@ def main():
  s=p.add_subparsers(dest='cmd',required=True)
  s.add_parser('stats')
  for name in ('search','similar'):
-  q=s.add_parser(name);q.add_argument('--limit',type=int,default=30);q.add_argument('--category');q.add_argument('--microcategory');q.add_argument('--min-subscribers',type=int,default=0)
+  q=s.add_parser(name);q.add_argument('--limit',type=int,default=30);q.add_argument('--category');q.add_argument('--microcategory');q.add_argument('--min-subscribers',type=int,default=0);q.add_argument('--exact',action='store_true',help='Отключить морфологию');q.add_argument('--explain-query',action='store_true',help='Вывести формы поиска в stderr')
   if name=='search':q.add_argument('--query',default='');q.add_argument('--match',choices=['all','any'],default='any')
   else:
    q.add_argument('--seed',required=True,help='TGPages UUID, @username or https://t.me/username');q.add_argument('--query',default='',help='Ограничить соседей словами, например географией')
  a=p.parse_args()
+ if a.cmd in ('search','similar') and a.query and not a.exact:
+  try:import pymorphy3
+  except ImportError:
+   python=Path.home()/'.local/share/telegram-ads/venv'/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
+   if python.is_file() and os.environ.get('TG_ADS_MORPH_REEXEC')!='1':
+    os.environ['TG_ADS_MORPH_REEXEC']='1';os.execv(str(python),[str(python),str(Path(__file__).resolve()),*sys.argv[1:]])
+   p.error('Нужен pymorphy3: python3 scripts/setup_catalog.py; либо --exact')
  config=Path.home()/'.config/telegram-ads/catalog.json'
  configured=json.loads(config.read_text()).get('db') if config.exists() else None
  candidate=a.db or os.environ.get('TELEGRAM_ADS_CATALOG') or configured or str(Path.home()/'.local/share/telegram-ads/channels.sqlite')
@@ -32,7 +40,8 @@ def main():
  if a.cmd=='search':
   tokens=a.query.split()
   if tokens:
-   query=(' AND ' if a.match=='all' else ' OR ').join('"'+t.replace('"','""')+'"' for t in tokens)
+   query,expanded=build_query(a.query,a.match,a.exact)
+   if a.explain_query:print(json.dumps({'expanded_query':expanded},ensure_ascii=False),file=sys.stderr)
    sql='SELECT '+fields+',bm25(channel_search) AS text_rank FROM channel_search JOIN channels c ON c.rowid=channel_search.rowid WHERE channel_search MATCH ? AND '+' AND '.join(filters)+' ORDER BY text_rank,c.id LIMIT ?'
    rows=db.execute(sql,[query]+params+[a.limit])
   else:
@@ -45,7 +54,8 @@ def main():
   if len(seeds)!=1:p.error('Seed не найден или неоднозначен; используйте UUID из поиска')
   seed=seeds[0]
   if a.query:
-   query=' OR '.join('"'+term.replace('"','""')+'"' for term in a.query.split())
+   query,expanded=build_query(a.query,exact=a.exact)
+   if a.explain_query:print(json.dumps({'expanded_query':expanded},ensure_ascii=False),file=sys.stderr)
    filters.append('c.rowid IN (SELECT rowid FROM channel_search WHERE channel_search MATCH ?)');params.append(query)
   rows=db.execute('SELECT '+fields+',((c.x-?)*(c.x-?)+(c.y-?)*(c.y-?)) AS distance_squared FROM channels c WHERE c.id<>? AND '+' AND '.join(filters)+' ORDER BY distance_squared,c.id LIMIT ?',[seed['x'],seed['x'],seed['y'],seed['y'],seed['id']]+params+[a.limit])
   result=[dict(r,seed_id=seed['id'],discovery='map_2d_distance',audience_overlap=None) for r in rows]
@@ -55,4 +65,4 @@ def main():
  db.close()
 if __name__=='__main__':
  try:main()
- except (sqlite3.Error,ValueError,OSError) as e:print('Ошибка каталога: '+str(e),file=sys.stderr);sys.exit(2)
+ except (sqlite3.Error,ValueError,OSError,RuntimeError) as e:print('Ошибка каталога: '+str(e),file=sys.stderr);sys.exit(2)
