@@ -23,6 +23,15 @@ def render(data):
             if not e['url'].startswith(('https://','http://')):
                 raise ValueError('Unsafe evidence URL')
     template=(Path(__file__).resolve().parents[1]/'assets/report.html').read_text()
+    if 'attribution' in data:
+        import re
+        attribution=data['attribution']
+        url=attribution.get('url','')
+        if url and not url.startswith('https://'):
+            raise ValueError('Unsafe attribution URL')
+        text=html.escape(attribution.get('text',''))
+        link=('<a href="'+html.escape(url,quote=True)+'">'+html.escape(attribution.get('label',''))+'</a>') if url else ''
+        template=re.sub(r'<p>Пример результата.*?</p>',lambda _: '<p>'+text+' '+link+'</p>',template)
     labels={'target':'Целевой','adjacent':'Смежный','expansion':'Для расширения','reject':'Отсеян','needs_review':'Требует проверки','manual_ads':'Для ручной рекламы'}
     states={'reviewed':'Посты прочитаны','prefiltered':'Отсев по метаданным','pending':'Ожидает чтения','read_failed':'Посты недоступны','size_filtered':'Меньше 1000 подписчиков'}
     esc=html.escape
