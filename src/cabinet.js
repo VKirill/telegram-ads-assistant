@@ -11,6 +11,13 @@ export async function cabinetOperation(command,args){
  const set=(e,value)=>{for(const [attr,compare]of [['data-min',(a,b)=>a<b],['min',(a,b)=>a<b],['data-max',(a,b)=>a>b],['max',(a,b)=>a>b]]){const raw=e.getAttribute(attr);if(raw!==null&&raw!==''&&Number.isFinite(Number(raw))&&compare(Number(value),Number(raw)))throw Error(e.name+': '+value+' нарушает '+attr+'='+raw);}const max=e.getAttribute('maxlength');if(max!==null&&Number(max)>=0&&String(value).length>Number(max))throw Error(e.name+': превышен maxlength='+max);const proto=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(e,String(value??''));e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));e.dispatchEvent(new Event('blur',{bubbles:true}));};
  const radio=async(name,value)=>{const e=document.querySelector('input[name="'+name+'"][value="'+value+'"]');if(!e)throw Error('Radio unavailable: '+name);if(!e.checked){e.click();await sleep(250);}if(!e.checked)throw Error('Radio not selected');};
  const checkbox=(name,value)=>{const e=document.querySelector('input[type="checkbox"][name="'+name+'"]');if(!e)throw Error('Checkbox missing '+name);if(e.checked!==value)e.click();};
+ const isWebsite=value=>{try{return new URL(value).hostname!=='t.me';}catch{return false;}};
+ const websiteConfirmed=()=>visible(document.querySelector('.js-field-website_name-wrap'));
+ const confirmWebsite=async(value,name)=>{
+ if(!isWebsite(value))return;
+ await wait(()=>{const errors=messages();if(errors.length)throw Error(errors.join('; '));return websiteConfirmed();});
+ if(name!=null)set(byName('website_name'),name);
+ };
  const messages=()=>[...document.querySelectorAll('.field-error,.pr-field-error,.form-error,.error-message,.pr-form-control-msg.no-hint .pr-form-control-msg-text')].filter(visible).map(e=>e.textContent.trim()).filter(Boolean);
  const fingerprint=async obj=>[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(obj))))].map(b=>b.toString(16).padStart(2,'0')).join('');
  const snapshot=()=>{
@@ -20,7 +27,7 @@ export async function cabinetOperation(command,args){
  }
  const targets={};for(const e of document.querySelectorAll('.select[data-name]'))targets[e.dataset.name]=[...e.querySelectorAll('.selected-item')].map(x=>({label:x.textContent.trim(),key:x.getAttribute('data-val')??null}));
  const media=document.querySelector('[name="media"]');
- return {path:location.pathname,fields,targets,mediaSaved:!!media?.value,cpmSurcharge:document.querySelector('.js-cpm-extra')?.textContent.trim()??null,mediaLoading:!!document.querySelector('.js-ad-media-wrap.file-loading'),errors:messages()};
+ return {path:location.pathname,fields,targets,mediaSaved:!!media?.value,cpmSurcharge:document.querySelector('.js-cpm-extra')?.textContent.trim()??null,mediaLoading:!!document.querySelector('.js-ad-media-wrap.file-loading'),destinationVerification:isWebsite(fields.promote_url)?(websiteConfirmed()?'website_recognized_by_cabinet':'website_not_confirmed'):'server_validation_required',errors:messages()};
  };
  const result=async()=>{const data=snapshot();return {...data,fingerprint:await fingerprint({snapshot:data,mediaHandle:document.querySelector('[name="media"]')?.value??''})};};
  const requireAd=()=>{if(location.pathname!=='/account/ad/'+args.adId&&location.pathname!=='/account/ad/'+args.adId+'/budget'&&location.pathname!=='/account/ad/'+args.adId+'/stats')throw Error('Ad identity mismatch');};
@@ -70,6 +77,7 @@ export async function cabinetOperation(command,args){
  if(ad.dailyBudget!=null)fields.daily_budget=ad.dailyBudget;
  // Validate all scalar controls before changing any scalar.
  const entries=Object.entries(fields).map(([n,v])=>({e:byName(n),v}));for(const {e,v}of entries)set(e,v);
+ await confirmWebsite(ad.url,ad.websiteName);
  if(ad.viewsPerUser)await radio('views_per_user',String(ad.viewsPerUser));
  if(ad.picture!=null)checkbox('picture',ad.picture);
  if(t.type==='users'&&t.placement)await radio('placement',t.placement);
@@ -87,6 +95,7 @@ export async function cabinetOperation(command,args){
  const map={title:'title',text:'text',url:'promote_url',cpm:'cpm',dailyBudget:'daily_budget',startDate:'ad_activate_date',startTime:'ad_activate_time',endDate:'ad_deactivate_date',endTime:'ad_deactivate_time'};
  const entries=Object.entries(args.patch).filter(([k])=>map[k]).map(([k,v])=>({e:byName(map[k]),v}));
  for(const {e,v}of entries)set(e,v);
+ if(args.patch.url!=null||args.patch.websiteName!=null)await confirmWebsite(args.patch.url??byName('promote_url').value,args.patch.websiteName);
  if(args.patch.status)await radio('active',args.patch.status==='active'?'1':'0');
  if(args.patch.viewsPerUser)await radio('views_per_user',String(args.patch.viewsPerUser));
  if(args.patch.picture!=null)checkbox('picture',args.patch.picture);
@@ -143,6 +152,7 @@ export async function cabinetOperation(command,args){
  if(['commit_ad','commit_edit','commit_budget','delete_ad'].includes(command)){
  if(args.allowWrite!==true)throw Error('Publishing and financial operations are paused');
  const data=await result();if(data.fingerprint!==args.expectedFingerprint)throw Error('Form changed since preview; re-read required');
+ if(data.destinationVerification==='website_not_confirmed')throw Error('Website destination not confirmed by cabinet');
  if(data.errors.length||data.mediaLoading)throw Error('Form has errors or media is pending');
  if(command==='delete_ad'){requireAd();one('.delete-ad-btn').click();return {state:'awaiting_native_delete_confirmation',adId:args.adId,deleted:false};}
  if(command==='commit_ad'){

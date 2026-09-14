@@ -1,3 +1,4 @@
+import {destinationErrors} from './destinations.js';
 export const operations={
  read_constraints:{write:false},read_draft:{write:false},read_ad:{write:false},prepare_schedule:{write:false},clone_ad:{write:false},export_csv:{write:false},read_budget:{write:false},read_statistics:{write:false},
  prepare_ad:{write:false},upload_media:{write:false},prepare_edit:{write:false},prepare_budget:{write:false},
@@ -7,9 +8,12 @@ export function validateOperation(command,args){
  const errors=[];if(!operations[command])return ['Unknown operation'];
  if(command!=='read_constraints'&&command!=='read_draft'&&command!=='prepare_ad'&&command!=='upload_media'&&command!=='commit_ad'&&!/^\d+$/.test(String(args.adId??'')))errors.push('adId must be numeric');
  if(args.month!=null&&!/^(20[0-9]{2})(0[1-9]|1[0-2])$/.test(args.month))errors.push('Invalid month YYYYMM');
+ if(args.currency!=null&&!['TON','EUR','XTR'].includes(args.currency))errors.push('currency must be TON, EUR or XTR');
  if(command==='prepare_ad'&&!args.ad)errors.push('ad required');
  if(command==='prepare_edit'){
- const patch=args.patch||{},allowed=['title','text','url','cpm','dailyBudget','viewsPerUser','status','picture','startDate','startTime','endDate','endTime'];
+ const patch=args.patch||{},allowed=['title','text','url','cpm','dailyBudget','viewsPerUser','status','picture','startDate','startTime','endDate','endTime','websiteName'];
+ if(patch.url!=null)errors.push(...destinationErrors(patch.url));
+ if(patch.websiteName!=null&&(typeof patch.websiteName!=='string'||!patch.websiteName.trim()||patch.websiteName.length>128))errors.push('Invalid websiteName');
  if(!Object.keys(patch).length||Object.keys(patch).some(k=>!allowed.includes(k)))errors.push('Invalid patch. Target is immutable; create a new ad.');
  for(const key of ['cpm','dailyBudget'])if(patch[key]!=null&&(!Number.isFinite(patch[key])||patch[key]<0||(key==='cpm'&&patch[key]===0)))errors.push('Invalid '+key);
  if(patch.status&&!['active','on_hold'].includes(patch.status))errors.push('Invalid status');

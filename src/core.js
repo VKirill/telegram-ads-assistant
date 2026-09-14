@@ -1,3 +1,4 @@
+import {destinationErrors} from './destinations.js';
 import {validateDetails,textLength} from './validation.js';
 import {validateTarget,targetOf} from './targeting.js';
 export function validatePackage(p,constraints) {
@@ -5,7 +6,7 @@ export function validatePackage(p,constraints) {
  const errors=details.map(x=>x.field+": "+x.message);
  if(!p || p.version!==1) return ['Требуется version: 1'];
  if(typeof p.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.id))errors.push('Некорректный ID пакета');
- if(p.currency!=='TON')errors.push('Укажите currency: TON');
+ if(!['TON','EUR','XTR'].includes(p.currency))errors.push('Укажите currency: TON, EUR или XTR (Stars)');
  if(!Number.isFinite(p.totalBudget)||p.totalBudget<=0)errors.push('Некорректный общий лимит');
  if(!Array.isArray(p.ads)||p.ads.length<1||p.ads.length>100)return [...errors,'Пакет должен содержать 1–100 объявлений'];
  const ids=new Set(), external=new Set();let sum=0;
@@ -15,7 +16,7 @@ export function validatePackage(p,constraints) {
   if(typeof a.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(a.id)||ids.has(a.id))e('ID отсутствует/повторяется');ids.add(a.id);
   if(typeof a.title!=='string'||!a.title.trim()||a.title.length>128)e('некорректный заголовок');
   if(targetOf(a)?.type!=='search'&&(typeof a.text!=='string'||!a.text.trim()||textLength(a.text)>160||/[\r\n]/.test(a.text)))e('текст: 1–160 символов, одна строка');
-  try{const u=new URL(a.url);const search=targetOf(a)?.type==='search';if(u.origin!=='https://t.me'||u.username||u.password||u.hash||!/^\/[A-Za-z0-9_]+$/.test(u.pathname)||(search?!!u.search:(!/^[-\w]{1,64}$/.test(u.searchParams.get('start')||'')||[...u.searchParams.keys()].some(k=>k!=='start'))))throw 0;}catch{e(targetOf(a)?.type==='search'?'Search: нужна ссылка t.me без start-параметра':'нужна HTTPS-ссылка t.me с корректной start-меткой');}
+  for(const error of destinationErrors(a.url,targetOf(a)?.type))e(error);
   if(!Number.isFinite(a.budget)||a.budget<=0||a.budget>p.totalBudget)e('некорректный бюджет');else sum+=Math.round(a.budget*1e9);
   if(!Number.isFinite(a.cpm)||a.cpm<=0||Math.abs(a.cpm*100-Math.round(a.cpm*100))>1e-7)e('некорректный CPM');
   if(a.status!=='on_hold')e('в этой версии разрешён только on_hold');

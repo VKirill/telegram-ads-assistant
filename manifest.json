@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SelfyStudio · Telegram Ads Assistant",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Локальные рекламные пакеты, проверка и заполнение формы Telegram Ads.",
   "permissions": [
     "activeTab",

@@ -7,7 +7,7 @@ import {z} from 'zod';
 import {Service} from './service.js';
 import {fileURLToPath} from 'node:url';
 const service=new Service(process.env.TG_ASSISTANT_DATA_DIR||fileURLToPath(new URL('../.local/mcp/',import.meta.url)));
-const server=new McpServer({name:'telegram-ads-assistant',version:'0.1.0'});
+const server=new McpServer({name:'telegram-ads-assistant',version:'0.5.0'});
 const definitions={
  read_constraints:{description:'Прочитать актуальные числовые ограничения текущего кабинета без сохранения рекламы',inputSchema:{}},
  read_draft:{description:'Прочитать текущий черновик и свежий fingerprint без изменения полей',inputSchema:{}},
@@ -18,7 +18,7 @@ const definitions={
  read_budget:{description:'Текущий бюджет и история операций',inputSchema:{adId:z.string().regex(/^\d+$/)}},
  export_csv:{description:'Скачать CSV из реальной ссылки отчёта, без выдачи служебного URL',inputSchema:{adId:z.string().regex(/^\d+$/),month:z.string().regex(/^20[0-9]{2}(0[1-9]|1[0-2])$/).optional()}},
  read_statistics:{description:'Прочитать отображаемые данные страницы Statistics; графики не извлекаются',inputSchema:{adId:z.string().regex(/^\d+$/),month:z.string().regex(/^20[0-9]{2}(0[1-9]|1[0-2])$/).optional()}},
- prepare_ad:{description:'Заполнить новый черновик Search/Bots/Users/Channels без создания',inputSchema:{ad:z.unknown()}},
+ prepare_ad:{description:'Заполнить новый черновик Search/Bots/Users/Channels без создания',inputSchema:{ad:z.unknown(),currency:z.enum(['TON','EUR','XTR']).optional()}},
  upload_media:{description:'Загрузить MP4/JPEG/PNG по path либо url (HTTP(S), включая localhost) в текущий черновик без публикации',inputSchema:{path:z.string().optional(),url:z.string().url().optional(),adId:z.string().regex(/^\d+$/).optional()}},
  prepare_edit:{description:'Подготовить CPM, статус, текст и другие изменяемые поля без сохранения',inputSchema:{adId:z.string().regex(/^\d+$/),patch:z.record(z.string(),z.unknown())}},
  prepare_budget:{description:'Подготовить добавление или возврат бюджета без перевода средств',inputSchema:{adId:z.string().regex(/^\d+$/),direction:z.enum(['add','withdraw']),amount:z.number().positive()}},

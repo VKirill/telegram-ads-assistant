@@ -1,3 +1,4 @@
+import {validateCurrency} from './destinations.js';
 import {readCabinetConstraints} from './constraints.js';
 import {cabinetOperation} from './cabinet.js';
 import {operations,validateOperation} from './operations.js';
@@ -21,7 +22,7 @@ async function run(job){
  if(operations[job.command]){
  const errors=validateOperation(job.command,job.args);if(errors.length)throw Error(errors.join('; '));
  if(job.command==='prepare_ad'){
- const ad=job.args.ad,validation=validatePackage({version:1,id:'validation',currency:'TON',totalBudget:ad.budget,ads:[ad]});
+ const ad=job.args.ad,validation=validatePackage({version:1,id:'validation',currency:job.args.currency??'TON',totalBudget:ad.budget,ads:[ad]});
  if(validation.length)throw Error(validation.join('; '));
  }
  const stored=await chrome.storage.local.get('operationTab');
@@ -35,7 +36,7 @@ async function run(job){
  await chrome.tabs.update(tab.id,{url:'https://ads.telegram.org'+path+(['read_statistics','export_csv'].includes(job.command)&&job.args.month?'?month='+job.args.month:'')});
  }
  for(let i=0;i<50;i++){tab=await chrome.tabs.get(tab.id);if(tab.status==='complete')break;await new Promise(r=>setTimeout(r,100));}
- if(job.command==='prepare_ad'){const constraints=(await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:readCabinetConstraints}))[0]?.result;const ad=job.args.ad;const errors=validatePackage({version:1,id:'validation',currency:'TON',totalBudget:ad.budget,ads:[ad]},constraints);if(errors.length)return {error:errors.join('; '),errors,constraints};}
+ if(job.command==='prepare_ad'){const constraints=(await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:readCabinetConstraints}))[0]?.result;const ad=job.args.ad;const currency=job.args.currency??constraints?.currency;const mismatch=validateCurrency(currency,constraints?.currency);if(mismatch)return {error:mismatch,constraints};const errors=validatePackage({version:1,id:'validation',currency,totalBudget:ad.budget,ads:[ad]},constraints);if(errors.length)return {error:errors.join('; '),errors,constraints};}
  if(job.command==='read_constraints')return (await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:readCabinetConstraints}))[0]?.result;
  if(operations[job.command].write){
  const key='op-'+job.args.operationId;if((await chrome.storage.local.get(key))[key])throw Error('Operation already attempted; re-read instead of retry');
@@ -53,15 +54,8 @@ async function run(job){
  if(job.command==='inspect_form'){
  const tabId=await tabFor('form');return (await chrome.scripting.executeScript({target:{tabId},func:formBridge,args:['inspect',null]}))[0].result;
  }
- if(job.command==='prepare_form'){
- const p=job.args.package,errors=validatePackage(p);if(errors.length)throw Error(errors.join('; '));
- const ad=p.ads.find(a=>a.id===job.args.adId);if(!ad)throw Error('Объявление не найдено');
- const key='mcp-prepared-'+p.id+'-'+ad.id;
- if((await chrome.storage.local.get(key))[key])throw Error('Попытка уже записана. Сначала сверка формы, автоматического повтора нет');
- const tabId=await tabFor('form');
- await chrome.storage.local.set({[key]:{state:'attempting',at:new Date().toISOString()}});
- return (await chrome.scripting.executeScript({target:{tabId},func:formBridge,args:['prepare',ad]}))[0].result;
- }
+ if(job.command==='prepare_form')throw Error('prepare_form устарел: используйте prepare_ad с currency, затем проверку и commit_ad');
+
  throw Error('Команда запрещена');
 }
 document.getElementById('bridge-connect').onclick=async()=>{

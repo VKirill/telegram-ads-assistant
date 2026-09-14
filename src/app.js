@@ -1,3 +1,6 @@
+import {cabinetOperation} from './cabinet.js';
+import {readCabinetConstraints} from './constraints.js';
+import {validateCurrency} from './destinations.js';
 import {targetOf} from './targeting.js';
 import {validatePackage,plan,digest} from './core.js';
 import {formBridge} from './adapter.js';
@@ -8,11 +11,18 @@ function note(text){$('message').textContent=text;}
 function log(action,result){events.push({time:new Date().toISOString(),action,result});events=events.slice(-200);$('log').textContent=JSON.stringify(events,null,2);}
 function draw(){ $('rows').replaceChildren();$('summary').replaceChildren();$('empty').hidden=!!data;
  if(!data)return;
- for(const [label,value] of [['Объявления',data.ads.length],['Бюджет пакета',`${data.ads.reduce((s,a)=>s+a.budget,0).toFixed(2)} TON`],['Общий предел',`${data.totalBudget} TON`]]){const d=document.createElement('div');d.className='card';d.textContent=label;const b=document.createElement('strong');b.textContent=value;d.append(b);$('summary').append(d);}
+ for(const [label,value] of [['Объявления',data.ads.length],['Бюджет пакета',`${data.ads.reduce((s,a)=>s+a.budget,0).toFixed(2)} ${data.currency}`],['Общий предел',`${data.totalBudget} ${data.currency}`]]){const d=document.createElement('div');d.className='card';d.textContent=label;const b=document.createElement('strong');b.textContent=value;d.append(b);$('summary').append(d);}
  for(const row of plan(data,receipts)){const a=data.ads.find(x=>x.id===row.id);const tr=document.createElement('tr');for(const text of [a.title,targetOf(a).type,a.cpm.toFixed(2),a.budget.toFixed(2),row.externalId?`Существующее №${row.externalId}`:row.action==='verify_before_repeat'?'Форма заполнена, не сохранено':'Готово к подготовке']){const td=document.createElement('td');td.textContent=text;tr.append(td);}const td=document.createElement('td'),btn=document.createElement('button');btn.textContent='Заполнить форму';btn.disabled=!!a.externalId||busy||row.action==='verify_before_repeat';btn.onclick=()=>prepare(a);td.append(btn);tr.append(td);$('rows').append(tr);}
 }
 async function target(){if(!extension)throw Error('Это локальный предпросмотр. Для доступа к форме установите расширение и нажмите его значок во вкладке Telegram Ads.');const {targetTab}=await chrome.storage.session.get('targetTab');if(!targetTab)throw Error('Нажмите значок расширения в нужной вкладке Telegram Ads.');return targetTab;}
-async function invoke(command,ad){const tabId=await target();const result=await chrome.scripting.executeScript({target:{tabId},func:formBridge,args:[command,ad??null]});if(!result[0]?.result)throw Error('Нет подтверждения от формы');return result[0].result;}
+async function invoke(command,ad){const tabId=await target();let result;
+ if(command==='prepare'){
+ const constraints=(await chrome.scripting.executeScript({target:{tabId},world:'MAIN',func:readCabinetConstraints}))[0]?.result;
+ const mismatch=validateCurrency(data.currency,constraints?.currency);if(mismatch)throw Error(mismatch);
+ const errors=validatePackage(data,constraints);if(errors.length)throw Error(errors.join('; '));
+ result=await chrome.scripting.executeScript({target:{tabId},func:cabinetOperation,args:['prepare_ad',{ad}]});
+ }else result=await chrome.scripting.executeScript({target:{tabId},func:formBridge,args:[command,ad??null]});
+ if(!result[0]?.result)throw Error('Нет подтверждения от формы');if(result[0].result.error)throw Error(result[0].result.error);return result[0].result;}
 async function prepare(ad){if(busy)return;busy=true;draw();try{const currentErrors=validatePackage(data);if(currentErrors.length)throw Error(currentErrors.join('\n'));const result=await invoke('prepare',ad);receipts[ad.id]={...result,at:new Date().toISOString(),packageHash:await digest(data)};log('prepare', {id:ad.id,...result});note('Поля заполнены. Каналы, медиа и статус требуют проверки. Ничего не опубликовано.');await store();}catch(e){log('error',String(e.message));note(e.message);}finally{busy=false;draw();}}
 async function load(p){const errors=validatePackage(p);if(errors.length)throw Error(errors.join('\n'));if(data&&JSON.stringify(data)!==JSON.stringify(p)&&!confirm('Заменить текущий локальный пакет? Журнал останется, отметки заполнения будут сброшены.'))return;const unchanged=data&&JSON.stringify(data)===JSON.stringify(p);data=p;if(!unchanged)receipts={};log('import',{id:p.id,hash:await digest(p),ads:p.ads.length});await store();draw();note('Пакет проверен и готов к работе.');}
 $('import').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>2*1024*1024)throw Error('JSON больше 2 MB');await load(JSON.parse(await file.text()));}catch(err){note(err.message);}e.target.value='';};

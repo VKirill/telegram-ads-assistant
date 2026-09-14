@@ -75,3 +75,19 @@ test('commit checks terms automatically after explicit write authorization',asyn
  const r=await fn('commit_ad',{allowWrite:true,expectedFingerprint:draft.fingerprint,operationId:'fixture-terms'});assert.equal(r.error,undefined);assert.equal(clicked,true);assert.equal(r.state,'submitted_needs_verification');
  }finally{dom.window.close();}
 });
+test('website draft waits for native recognition, preserves UTM, fills website name without submitting',async()=>{
+ const dom=page('/account/ad/new','<input name="title"><input name="promote_url"><input name="cpm"><input name="budget"><textarea name="text"></textarea><input type="radio" name="target_type" value="channels" checked><input type="radio" name="active" value="0" checked><div class="js-field-website_name-wrap" hidden><input name="website_name"></div><button>Create Ad</button>');
+ try{let clicked=0;dom.window.document.querySelector('button').onclick=()=>clicked++;
+ dom.window.document.querySelector('[name="promote_url"]').addEventListener('change',()=>setTimeout(()=>{dom.window.document.querySelector('.js-field-website_name-wrap').hidden=false;},30));
+ const r=await dom.window.eval('('+cabinetOperation.toString()+')')('prepare_ad',{ad:{title:'Site',text:'Test',url:'https://example.com/landing?utm_source=tg',websiteName:'My site',cpm:.75,budget:2,target:{type:'channels'}}});
+ assert.equal(r.error,undefined);assert.equal(r.fields.website_name,'My site');assert.equal(r.fields.promote_url,'https://example.com/landing?utm_source=tg');assert.equal(r.destinationVerification,'website_recognized_by_cabinet');assert.equal(clicked,0);assert.equal(r.published,false);
+ }finally{dom.window.close();}
+});
+test('native rejection of website aborts preparation and cannot become a commit',async()=>{
+ const dom=page('/account/ad/new','<input name="title"><input name="promote_url"><input name="cpm"><input name="budget"><textarea name="text"></textarea><input type="radio" name="target_type" value="channels" checked><input type="radio" name="active" value="0" checked><button>Create Ad</button>');
+ try{let clicked=0;dom.window.document.querySelector('button').onclick=()=>clicked++;
+ dom.window.document.querySelector('[name="promote_url"]').addEventListener('change',()=>{const e=dom.window.document.createElement('div');e.className='field-error';e.textContent='Website unavailable in this account';dom.window.document.body.append(e);});
+ const fn=dom.window.eval('('+cabinetOperation.toString()+')');const r=await fn('prepare_ad',{ad:{title:'Site',text:'Test',url:'https://example.com',cpm:.75,budget:2,target:{type:'channels'}}});assert.match(r.error,/Website unavailable/);
+ const draft=await fn('read_draft',{});const result=await fn('commit_ad',{allowWrite:true,expectedFingerprint:draft.fingerprint,operationId:'test-website'});assert.match(result.error,/not confirmed/);assert.equal(clicked,0);
+ }finally{dom.window.close();}
+});

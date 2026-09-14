@@ -18,3 +18,12 @@ test('schema changes and wrong origin produce explicit errors rather than null',
  const r=run(html,url);assert.equal(r.available,false);assert.ok(r.error);
  }
 });
+test('EUR table preserves values and marks currency without converting',()=>{
+ const r=run(fixture.replaceAll('currency-ton','currency-euro').replaceAll('💎','€'));
+ assert.equal(r.currency,'EUR');assert.equal(r.rows[0].budget,1);assert.equal(r.rows[0].cpm,.2);assert.equal(r.rows[0].spent,0);
+});
+
+test('Stars table parses emoji and retains XTR units',()=>{
+ const r=run(fixture.replaceAll('currency-ton','currency-star').replaceAll('💎','⭐️'));
+ assert.equal(r.currency,'XTR');assert.equal(r.rows[0].budget,1);assert.equal(r.rows[0].spent,0);
+});

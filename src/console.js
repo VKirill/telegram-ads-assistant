@@ -1,3 +1,5 @@
+import {readCabinetConstraints} from './constraints.js';
+import {validateCurrency} from './destinations.js';
 import {validatePackage} from './core.js';
 import {cabinetOperation} from './cabinet.js';
 import {readAccountSnapshot} from './stats.js';
@@ -24,7 +26,7 @@ function show(value){
 async function execute(command,args){
  if(busy)throw Error('Дождитесь текущей операции');busy=true;
  try{
- if(command==='prepare_ad'){const ad=args.ad;const errors=validatePackage({version:1,id:'ui',currency:'TON',totalBudget:ad?.budget,ads:[ad]});if(errors.length)throw Error(errors.join('; '));}
+ if(command==='prepare_ad'){const ad=args.ad;const errors=validatePackage({version:1,id:'ui',currency:args.currency??'TON',totalBudget:ad?.budget,ads:[ad]});if(errors.length)throw Error(errors.join('; '));}
  if(command!=='read_account'){const e=validateOperation(command,args);if(e.length)throw Error(e.join('; '));}
  const path=command==='read_account'?'/account':command==='prepare_ad'||(!args.adId)?'/account/ad/new':'/account/ad/'+args.adId+(['read_budget','prepare_budget'].includes(command)?'/budget':['read_statistics','export_csv'].includes(command)?'/stats':'');
  let {consoleTab}=await chrome.storage.local.get('consoleTab'),tab;
@@ -33,6 +35,7 @@ async function execute(command,args){
  else if(new URL(tab.url).pathname!==path)await chrome.tabs.update(tab.id,{url:'https://ads.telegram.org'+path+(['read_statistics','export_csv'].includes(command)&&args.month?'?month='+args.month:'')});
  for(let i=0;i<100;i++){const t=await chrome.tabs.get(tab.id);if(t.status==='complete')break;await new Promise(r=>setTimeout(r,100));}
  if(command==='read_account'){await chrome.tabs.reload(tab.id);for(let i=0;i<100;i++){const t=await chrome.tabs.get(tab.id);if(t.status==='complete')break;await new Promise(r=>setTimeout(r,100));}}
+ if(command==='prepare_ad'){const constraints=(await chrome.scripting.executeScript({target:{tabId:tab.id},world:'MAIN',func:readCabinetConstraints}))[0]?.result;const currency=args.currency??constraints?.currency;const mismatch=validateCurrency(currency,constraints?.currency);if(mismatch)throw Error(mismatch);const errors=validatePackage({version:1,id:'ui',currency,totalBudget:args.ad.budget,ads:[args.ad]},constraints);if(errors.length)throw Error(errors.join('; '));}
  const fn=command==='read_account'?readAccountSnapshot:cabinetOperation;
  last=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:fn,args:command==='read_account'?[]:[command,args]}))[0]?.result;
  show(last??{error:'missing_result'});
