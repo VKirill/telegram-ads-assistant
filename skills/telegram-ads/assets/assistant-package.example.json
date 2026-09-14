@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "example-bot-channel-test-v1",
+  "currency": "TON",
+  "totalBudget": 2,
+  "ads": [
+    {
+      "id": "example-channel-a",
+      "title": "EXAMPLE ONLY channel-a creative-01",
+      "text": "Учебный пример пакета. Замените текст перед использованием.",
+      "url": "https://t.me/ExampleBot?start=test_a",
+      "budget": 1,
+      "cpm": 0.2,
+      "status": "on_hold",
+      "target": { "type": "channels", "channels": ["example_channel_a"] }
+    },
+    {
+      "id": "example-channel-b",
+      "title": "EXAMPLE ONLY channel-b creative-01",
+      "text": "Учебный пример пакета. Замените текст перед использованием.",
+      "url": "https://t.me/ExampleBot?start=test_b",
+      "budget": 1,
+      "cpm": 0.2,
+      "status": "on_hold",
+      "target": { "type": "channels", "channels": ["example_channel_b"] }
+    }
+  ]
+}
