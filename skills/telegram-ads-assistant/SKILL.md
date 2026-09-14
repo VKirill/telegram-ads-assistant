@@ -1,6 +1,6 @@
 ---
 name: telegram-ads-assistant
-description: Управлять Telegram Ads через Chrome-расширение Telegram Ads Assistant и его MCP: создавать объявления, загружать медиа, менять CPM и бюджеты, читать статистику. Не предназначено для Telegram-рассылок.
+description: "Управлять Telegram Ads через Chrome-расширение Telegram Ads Assistant и его MCP: создавать объявления, загружать медиа, менять CPM и бюджеты, читать статистику. Не предназначено для Telegram-рассылок."
 metadata:
   version: "0.6.1"
   superseded_by: "telegram-ads"
